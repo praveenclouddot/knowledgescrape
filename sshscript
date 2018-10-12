@@ -1,0 +1,33 @@
+#!/bin/bash
+set -e
+
+# The purpose of this script is to generate tiller certificates for users who are part of the cluster-admin group, since they will have access to the CA key
+
+# Genertes helm home folder and copies CA cert and key as well as ssl.conf to generate our cert without user interaction
+mkdir ~/helm-preprod
+cp CA/tiller-admin/ca.cert.pem ~/helm-preprod/ca.pem
+cp CA/tiller-admin/ca.key.pem ~/helm-preprod/ca.key.pem
+cp CA/ssl.conf ~/helm-preprod/ssl.conf
+echo "Generated ~/helm-preprod"
+echo "Copied CA key and cert to ~/helm-preprod"
+
+# Switch to the newly created folder and create our key and csr using the ssl.conf file we just copied
+cd ~/helm-preprod
+openssl genrsa -out ./key.pem 4096
+openssl req -key key.pem -new -sha256 -out helm.csr.pem -config ssl.conf
+echo "Generated user key and csr"
+
+echo "Signing cert. This requires sudo permissions"
+# Sign our cert using the copied CA key and cert
+sudo openssl x509 -req -CA ca.pem -CAkey ca.key.pem -CAcreateserial -in helm.csr.pem -out cert.pem -days 365
+
+echo "Removing CA key..."
+# Remove CA key since this is a security risk
+rm ca.key.pem 
+
+
+echo "Generating helm-preprod alias"
+# Generate an alias called "helm-preprod" that sets HELM_HOME to ~/helm-preprod
+echo "alias helm-preprod=\"export HELM_HOME=$HOME/helm-preprod\"" >> ~/.bashrc
+
+echo "DONE"
